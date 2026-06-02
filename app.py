@@ -44,55 +44,51 @@ def get_avg_rating(store_name):
             return round(sum(scores) / len(scores), 1)
     return 0.0
 
-# --- 4. 🛠️ 관리자 모드 (비밀번호 대시보드) ---
-st.sidebar.header("⚙️ 시스템 모드")
-app_mode = st.sidebar.radio("모드 선택", ["👨‍🎓 사용자 모드 (지도 뷰)", "🛠️ 관리자 모드 (데이터 대시보드)"])
+# --- 4. 🛠️ 관리자 모드 (이스터에그 형태) ---
 st.sidebar.markdown("---")
+# 일반 모드 선택 버튼을 없애고, 사이드바 맨 밑에 작은 비밀번호 창만 몰래 생성
+admin_password = st.sidebar.text_input(" ", type="password", placeholder="🔑")
 
-if app_mode == "🛠️ 관리자 모드 (데이터 대시보드)":
-    admin_password = st.sidebar.text_input("관리자 비밀번호를 입력하세요", type="password")
+if admin_password == "1234":  # 여기에 원하는 비밀번호를 설정하세요
+    st.header("📈 제휴 혜택 데이터 분석 대시보드")
+    st.markdown("현재까지 누적된 후기 데이터를 기반으로 한 통계입니다. (관리자 전용)")
     
-    if admin_password == "1234":  # 필요 시 비밀번호 변경
-        st.header("📈 제휴 혜택 데이터 분석 대시보드")
-        st.markdown("현재까지 누적된 후기 데이터를 기반으로 한 통계입니다.")
+    if st.session_state.reviews:
+        all_reviews = []
+        for store, reviews in st.session_state.reviews.items():
+            for r in reviews:
+                all_reviews.append({
+                    "가게이름": store,
+                    "점수": r.get("점수", 0),
+                    "후기내용": r["내용"]
+                })
         
-        if st.session_state.reviews:
-            all_reviews = []
-            for store, reviews in st.session_state.reviews.items():
-                for r in reviews:
-                    all_reviews.append({
-                        "가게이름": store,
-                        "점수": r.get("점수", 0),
-                        "후기내용": r["내용"],
-                        "인증여부": "영수증 인증됨" if r.get("인증여부", False) else "일반"
-                    })
-            
-            df_reviews = pd.DataFrame(all_reviews)
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric(label="총 누적 후기 수", value=f"{len(df_reviews)} 개")
-            col2.metric(label="전체 평균 평점", value=f"{round(df_reviews['점수'].mean(), 2)} 점")
-            col3.metric(label="리뷰가 등록된 제휴 업체 수", value=f"{df_reviews['가게이름'].nunique()} 곳")
-            
-            st.divider()
-            
-            st.subheader("📊 제휴 업체별 평균 평점")
-            avg_scores = df_reviews.groupby('가게이름')['점수'].mean().reset_index()
-            st.bar_chart(data=avg_scores, x='가게이름', y='점수', use_container_width=True)
-            
-            st.subheader("🔥 가장 리뷰가 많은 핫플레이스 TOP 5")
-            review_counts = df_reviews['가게이름'].value_counts().head(5)
-            st.bar_chart(review_counts, use_container_width=True)
-            
-            with st.expander("원본 후기 데이터 열람 (Raw Data)"):
-                st.dataframe(df_reviews)
-        else:
-            st.info("아직 등록된 후기 데이터가 없습니다. 사용자 모드에서 테스트 후기를 남겨보세요!")
-            
-    elif admin_password != "":
-        st.sidebar.error("⚠️ 비밀번호가 일치하지 않습니다.")
-    
-    st.stop() # 관리자 모드일 땐 여기서 실행 종료
+        df_reviews = pd.DataFrame(all_reviews)
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric(label="총 누적 후기 수", value=f"{len(df_reviews)} 개")
+        col2.metric(label="전체 평균 평점", value=f"{round(df_reviews['점수'].mean(), 2)} 점")
+        col3.metric(label="리뷰가 등록된 제휴 업체 수", value=f"{df_reviews['가게이름'].nunique()} 곳")
+        
+        st.divider()
+        
+        st.subheader("📊 제휴 업체별 평균 평점")
+        avg_scores = df_reviews.groupby('가게이름')['점수'].mean().reset_index()
+        st.bar_chart(data=avg_scores, x='가게이름', y='점수', use_container_width=True)
+        
+        st.subheader("🔥 가장 리뷰가 많은 핫플레이스 TOP 5")
+        review_counts = df_reviews['가게이름'].value_counts().head(5)
+        st.bar_chart(review_counts, use_container_width=True)
+        
+        with st.expander("원본 후기 데이터 열람 (Raw Data)"):
+            st.dataframe(df_reviews)
+    else:
+        st.info("아직 등록된 후기 데이터가 없습니다. 사용자 화면에서 테스트 후기를 남겨보세요!")
+        
+    st.stop() # 비밀번호가 맞으면 대시보드만 보여주고, 아래쪽 코드 실행 중단
+
+elif admin_password != "":
+    st.sidebar.error("⚠️ 잘못된 코드입니다.")
 
 # ==========================================
 # --- 5. 👨‍🎓 일반 사용자 모드 (지도 및 혜택 표시) ---
@@ -192,14 +188,15 @@ try:
             st.info(f"**🎁 특별 회원 전체 혜택**\n\n{store_info['혜택']}")
             st.markdown("---")
             
-            # --- 📸 후기 작성 및 영수증 전용 OCR 인증 폼 ---
+            # --- 📸 후기 작성 및 영수증 필수 인증 폼 ---
             st.write("✏️ **이 가게에 후기 남기기**")
             with st.form(key=f'review_form_{store_info["이름"]}'):
                 rating = st.feedback("stars")
                 review_text = st.text_input("후기 내용을 입력하세요 (최소 5글자 이상):", placeholder="예: 혜택 잘 받았습니다! 맛있어요.")
                 
-                st.write("🔒 **영수증 방문 인증 (선택)**")
-                uploaded_file = st.file_uploader("제휴 식당 결제 영수증 사진을 올려주세요.", type=["jpg", "jpeg", "png"])
+                # '선택' 문구를 없애고 필수로 변경
+                st.write("🔒 **영수증 방문 인증 (필수)**")
+                uploaded_file = st.file_uploader("리뷰 등록을 위해 제휴 식당 결제 영수증 사진을 반드시 올려주세요.", type=["jpg", "jpeg", "png"])
                 
                 submit_button = st.form_submit_button(label="📝 후기 등록하기")
                 
@@ -210,68 +207,64 @@ try:
                         st.error("⚠️ 무의미한 후기 방지를 위해 최소 5글자 이상 작성해주세요.")
                     elif contains_bad_word(review_text):
                         st.error("🚨 비속어나 부적절한 단어가 포함된 후기는 등록할 수 없습니다.")
+                    elif uploaded_file is None:
+                        # 파일이 없으면 무조건 에러 발생 및 차단
+                        st.error("⚠️ 리뷰를 등록하려면 반드시 해당 식당의 영수증 사진을 첨부해야 합니다.")
                     else:
-                        is_verified = False
-                        
-                        if uploaded_file is not None:
-                            try:
-                                import pytesseract
-                                from PIL import Image
-                                
-                                img = Image.open(uploaded_file)
-                                extracted_text = pytesseract.image_to_string(img, lang='kor+eng')
-                                clean_text = extracted_text.replace(" ", "").replace("\n", "")
-                                
-                                # 1. 가게 이름 일치 검사 (핵심 추가 사항)
-                                # 띄어쓰기를 없애서 "스타벅스"와 "스타 벅스" 모두 인식되도록 처리
-                                target_store_clean = clicked_store_name.replace(" ", "")
-                                has_store_name = target_store_clean in clean_text
-                                
-                                # 2. 영수증 핵심 키워드 검사
-                                receipt_keywords = ["승인", "결제", "합계", "영수증", "부가세", "판매액", "카드"]
-                                has_keyword = any(kw in clean_text for kw in receipt_keywords)
-                                
-                                # 3. 금액 패턴 검사
-                                price_pattern = re.compile(r'\d{1,3}(?:,\d{3})*원?|\d+원')
-                                has_price = bool(price_pattern.search(clean_text))
-                                
-                                # 4. 교차 검증 로직 적용
-                                if has_store_name and has_keyword and has_price:
-                                    is_verified = True
-                                    st.success(f"✅ '{clicked_store_name}' 영수증 인식 성공! 신뢰할 수 있는 방문 리뷰로 등록됩니다.")
-                                elif not has_store_name:
-                                    st.warning(f"⚠️ 영수증에서 가게 이름('{clicked_store_name}')을 찾을 수 없어 일반 리뷰로 등록됩니다.")
-                                else:
-                                    st.warning("⚠️ 사진에서 결제 금액이나 영수증 내역을 명확히 찾을 수 없어 일반 리뷰로 등록됩니다.")
-                                    
-                            except ImportError:
-                                st.warning("⚠️ Tesseract OCR이 설치되어 있지 않아 일반 리뷰로 등록됩니다.")
-                            except Exception as e:
-                                st.warning("⚠️ 이미지 분석 중 오류가 발생하여 일반 리뷰로 등록됩니다.")
-                        
-                        if clicked_store_name not in st.session_state.reviews:
-                            st.session_state.reviews[clicked_store_name] = []
-                        
-                        score = rating + 1 
-                        stars = "⭐" * score
-                        
-                        st.session_state.reviews[clicked_store_name].append({
-                            "별점": stars, 
-                            "내용": review_text.strip(),
-                            "점수": score,
-                            "인증여부": is_verified
-                        })
-                        
-                        save_reviews(st.session_state.reviews)
-                        if not uploaded_file:
-                             st.success("일반 후기가 성공적으로 등록되었습니다!")
-                        st.rerun()
+                        # 파일이 있을 때만 OCR 로직 실행
+                        is_valid_receipt = False
+                        try:
+                            import pytesseract
+                            from PIL import Image
+                            
+                            img = Image.open(uploaded_file)
+                            extracted_text = pytesseract.image_to_string(img, lang='kor+eng')
+                            clean_text = extracted_text.replace(" ", "").replace("\n", "")
+                            
+                            target_store_clean = clicked_store_name.replace(" ", "")
+                            has_store_name = target_store_clean in clean_text
+                            
+                            receipt_keywords = ["승인", "결제", "합계", "영수증", "부가세", "판매액", "카드"]
+                            has_keyword = any(kw in clean_text for kw in receipt_keywords)
+                            
+                            price_pattern = re.compile(r'\d{1,3}(?:,\d{3})*원?|\d+원')
+                            has_price = bool(price_pattern.search(clean_text))
+                            
+                            # 모든 조건을 만족해야 참(True)
+                            if has_store_name and has_keyword and has_price:
+                                is_valid_receipt = True
+                            
+                        except ImportError:
+                            st.error("⚠️ 시스템 오류: OCR 엔진을 사용할 수 없습니다.")
+                        except Exception as e:
+                            st.error("⚠️ 이미지 분석 중 오류가 발생했습니다. 사진을 다시 확인해 주세요.")
+
+                        # 영수증이 유효할 때만 리뷰 저장
+                        if is_valid_receipt:
+                            if clicked_store_name not in st.session_state.reviews:
+                                st.session_state.reviews[clicked_store_name] = []
+                            
+                            score = rating + 1 
+                            stars = "⭐" * score
+                            
+                            st.session_state.reviews[clicked_store_name].append({
+                                "별점": stars, 
+                                "내용": review_text.strip(),
+                                "점수": score
+                            })
+                            
+                            save_reviews(st.session_state.reviews)
+                            st.success("✅ 영수증 인증 및 리뷰 등록이 완료되었습니다!")
+                            st.rerun()
+                        else:
+                            # 조건에 하나라도 안 맞으면 저장 안 하고 에러 띄움
+                            st.error("🚨 영수증에서 가게 이름이나 결제 내역을 명확히 찾을 수 없어 리뷰 등록이 거부되었습니다.")
             
             st.write("💬 **등록된 후기 목록**")
             if clicked_store_name in st.session_state.reviews and st.session_state.reviews[clicked_store_name]:
                 for r in reversed(st.session_state.reviews[clicked_store_name]):
-                    badge = "🧾 **[영수증 인증됨]**" if r.get("인증여부", False) else "👤 [일반 리뷰]"
-                    st.markdown(f"- {badge} {r['별점']} | {r['내용']}")
+                    # 이제 모든 리뷰는 영수증 인증이 된 상태임
+                    st.markdown(f"- 🧾 **[인증됨]** {r['별점']} | {r['내용']}")
             else:
                 st.write("<small style='color:gray;'>아직 작성된 후기가 없습니다. 첫 후기를 남겨보세요!</small>", unsafe_allow_html=True)
                 
