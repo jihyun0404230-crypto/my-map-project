@@ -292,4 +292,4 @@ try:
         else:
             st.info("💡 지도 위에 있는 **마커**를 클릭하시면 해당 가게의 요약 혜택이 뜨고, 패널에 상세 정보가 나타납니다!")
 
-    st.markdown(f"### 📋 {
+    st.markdown(f"### 📋 {selected_school} {selected_dept} - {selected_category} 전체 목록")
