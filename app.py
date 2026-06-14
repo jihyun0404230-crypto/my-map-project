@@ -5,27 +5,39 @@ from streamlit_folium import st_folium
 import json
 import os
 import re
+from datetime import date
 
 # --- 1. 페이지 레이아웃 설정 ---
-st.set_page_config(page_title="대학별 학과 맛집 혜택 지도 🗺️", layout="wide")
-st.title("🗺️ 우리 학교 & 학과 맞춤형 맛집 혜택 지도")
-st.markdown("학교와 학과를 선택하면, 해당 학생들을 위한 **특별 제휴 혜택**과 맛집 지도가 나타납니다!")
+st.set_page_config(page_title="대학별 학과 제휴 혜택 지도 🗺️", layout="wide")
+st.title("🗺️ 우리 학교 & 학과 맞춤형 제휴 혜택 지도")
+st.markdown("학교와 학과를 선택하면, 해당 학생들을 위한 **특별 제휴 혜택**과 지도가 나타납니다!")
 
-# --- 2. 리뷰 영구 저장 시스템 ---
+# --- 2. 영구 저장 시스템 (리뷰 및 방문자 수) ---
 REVIEWS_FILE = "reviews.json"
+VISITORS_FILE = "visitors.json"
 
-def load_reviews():
-    if os.path.exists(REVIEWS_FILE):
-        with open(REVIEWS_FILE, "r", encoding="utf-8") as f:
+def load_json(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
-def save_reviews(reviews_data):
-    with open(REVIEWS_FILE, "w", encoding="utf-8") as f:
-        json.dump(reviews_data, f, ensure_ascii=False, indent=4)
+def save_json(file_path, data):
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 if "reviews" not in st.session_state:
-    st.session_state.reviews = load_reviews()
+    st.session_state.reviews = load_json(REVIEWS_FILE)
+
+# --- [추가] 일별 방문자 수 체크 로직 ---
+if "visited" not in st.session_state:
+    st.session_state.visited = True # 세션당 1회만 카운트하기 위한 플래그
+    today_str = str(date.today())
+    visitors_data = load_json(VISITORS_FILE)
+    
+    # 오늘 날짜의 방문자 수 1 증가
+    visitors_data[today_str] = visitors_data.get(today_str, 0) + 1
+    save_json(VISITORS_FILE, visitors_data)
 
 # --- 3. 유틸리티 함수 (필터링 및 평점 계산) ---
 BAD_WORDS = ["씨발", "시발", "병신", "개새끼", "지랄", "존나", "미친", "좆"]
@@ -44,14 +56,33 @@ def get_avg_rating(store_name):
             return round(sum(scores) / len(scores), 1)
     return 0.0
 
-# --- 4. 🛠️ 관리자 모드 (이스터에그 형태) ---
+# --- 4. 🛠️ 관리자 모드 ---
 st.sidebar.markdown("---")
-# 일반 모드 선택 버튼을 없애고, 사이드바 맨 밑에 작은 비밀번호 창만 몰래 생성
-admin_password = st.sidebar.text_input(" ", type="password", placeholder="🔑")
+admin_password = st.sidebar.text_input(" ", type="password", placeholder="관리자 코드 입력")
 
-if admin_password == "1234":  # 여기에 원하는 비밀번호를 설정하세요
-    st.header("📈 제휴 혜택 데이터 분석 대시보드")
-    st.markdown("현재까지 누적된 후기 데이터를 기반으로 한 통계입니다. (관리자 전용)")
+if admin_password == "7777":
+    st.header("📈 제휴 혜택 관리자 대시보드")
+    st.markdown("누적 방문자 및 후기 데이터를 기반으로 한 통계입니다.")
+    
+    # [추가] 방문자 수 시각화
+    st.subheader("👥 일별 사이트 방문자 수")
+    visitors_data = load_json(VISITORS_FILE)
+    if visitors_data:
+        df_visitors = pd.DataFrame(list(visitors_data.items()), columns=["날짜", "방문자수"])
+        df_visitors = df_visitors.sort_values(by="날짜")
+        
+        # 오늘 방문자 및 총 방문자 메트릭 표시
+        today_val = visitors_data.get(str(date.today()), 0)
+        total_val = sum(visitors_data.values())
+        v_col1, v_col2 = st.columns(2)
+        v_col1.metric(label="오늘 방문자 수", value=f"{today_val} 명")
+        v_col2.metric(label="총 누적 방문자 수", value=f"{total_val} 명")
+        
+        st.line_chart(df_visitors.set_index("날짜"))
+    else:
+        st.info("방문자 데이터가 없습니다.")
+        
+    st.divider()
     
     if st.session_state.reviews:
         all_reviews = []
@@ -65,12 +96,11 @@ if admin_password == "1234":  # 여기에 원하는 비밀번호를 설정하세
         
         df_reviews = pd.DataFrame(all_reviews)
         
+        st.subheader("📝 리뷰 통계")
         col1, col2, col3 = st.columns(3)
         col1.metric(label="총 누적 후기 수", value=f"{len(df_reviews)} 개")
         col2.metric(label="전체 평균 평점", value=f"{round(df_reviews['점수'].mean(), 2)} 점")
-        col3.metric(label="리뷰가 등록된 제휴 업체 수", value=f"{df_reviews['가게이름'].nunique()} 곳")
-        
-        st.divider()
+        col3.metric(label="리뷰가 등록된 업체 수", value=f"{df_reviews['가게이름'].nunique()} 곳")
         
         st.subheader("📊 제휴 업체별 평균 평점")
         avg_scores = df_reviews.groupby('가게이름')['점수'].mean().reset_index()
@@ -83,9 +113,9 @@ if admin_password == "1234":  # 여기에 원하는 비밀번호를 설정하세
         with st.expander("원본 후기 데이터 열람 (Raw Data)"):
             st.dataframe(df_reviews)
     else:
-        st.info("아직 등록된 후기 데이터가 없습니다. 사용자 화면에서 테스트 후기를 남겨보세요!")
+        st.info("아직 등록된 후기 데이터가 없습니다.")
         
-    st.stop() # 비밀번호가 맞으면 대시보드만 보여주고, 아래쪽 코드 실행 중단
+    st.stop() # 관리자 모드일 경우 여기서 코드 실행 중단
 
 elif admin_password != "":
     st.sidebar.error("⚠️ 잘못된 코드입니다.")
@@ -194,7 +224,6 @@ try:
                 rating = st.feedback("stars")
                 review_text = st.text_input("후기 내용을 입력하세요 (최소 5글자 이상):", placeholder="예: 혜택 잘 받았습니다! 맛있어요.")
                 
-                # '선택' 문구를 없애고 필수로 변경
                 st.write("🔒 **영수증 방문 인증 (필수)**")
                 uploaded_file = st.file_uploader("리뷰 등록을 위해 제휴 식당 결제 영수증 사진을 반드시 올려주세요.", type=["jpg", "jpeg", "png"])
                 
@@ -208,10 +237,8 @@ try:
                     elif contains_bad_word(review_text):
                         st.error("🚨 비속어나 부적절한 단어가 포함된 후기는 등록할 수 없습니다.")
                     elif uploaded_file is None:
-                        # 파일이 없으면 무조건 에러 발생 및 차단
                         st.error("⚠️ 리뷰를 등록하려면 반드시 해당 식당의 영수증 사진을 첨부해야 합니다.")
                     else:
-                        # 파일이 있을 때만 OCR 로직 실행
                         is_valid_receipt = False
                         try:
                             import pytesseract
@@ -221,25 +248,21 @@ try:
                             extracted_text = pytesseract.image_to_string(img, lang='kor+eng')
                             clean_text = extracted_text.replace(" ", "").replace("\n", "")
                             
-                            target_store_clean = clicked_store_name.replace(" ", "")
-                            has_store_name = target_store_clean in clean_text
-                            
-                            receipt_keywords = ["승인", "결제", "합계", "영수증", "부가세", "판매액", "카드"]
+                            # [수정] 영수증 형태 완화 로직: 특정 키워드나 가격 형태가 하나라도 보이면 통과
+                            receipt_keywords = ["승인", "결제", "합계", "영수증", "부가세", "판매액", "카드", "주문", "금액"]
                             has_keyword = any(kw in clean_text for kw in receipt_keywords)
                             
                             price_pattern = re.compile(r'\d{1,3}(?:,\d{3})*원?|\d+원')
                             has_price = bool(price_pattern.search(clean_text))
                             
-                            # 모든 조건을 만족해야 참(True)
-                            if has_store_name and has_keyword and has_price:
+                            if has_keyword or has_price:
                                 is_valid_receipt = True
-                            
+                                
                         except ImportError:
                             st.error("⚠️ 시스템 오류: OCR 엔진을 사용할 수 없습니다.")
                         except Exception as e:
                             st.error("⚠️ 이미지 분석 중 오류가 발생했습니다. 사진을 다시 확인해 주세요.")
 
-                        # 영수증이 유효할 때만 리뷰 저장
                         if is_valid_receipt:
                             if clicked_store_name not in st.session_state.reviews:
                                 st.session_state.reviews[clicked_store_name] = []
@@ -253,17 +276,15 @@ try:
                                 "점수": score
                             })
                             
-                            save_reviews(st.session_state.reviews)
-                            st.success("✅ 영수증 인증 및 리뷰 등록이 완료되었습니다!")
+                            save_json(REVIEWS_FILE, st.session_state.reviews)
+                            st.success("✅ 영수증 형태가 확인되어 리뷰 등록이 완료되었습니다!")
                             st.rerun()
                         else:
-                            # 조건에 하나라도 안 맞으면 저장 안 하고 에러 띄움
-                            st.error("🚨 영수증에서 가게 이름이나 결제 내역을 명확히 찾을 수 없어 리뷰 등록이 거부되었습니다.")
+                            st.error("🚨 이미지에서 결제 내역이나 영수증 형태를 전혀 찾을 수 없어 리뷰 등록이 거부되었습니다.")
             
             st.write("💬 **등록된 후기 목록**")
             if clicked_store_name in st.session_state.reviews and st.session_state.reviews[clicked_store_name]:
                 for r in reversed(st.session_state.reviews[clicked_store_name]):
-                    # 이제 모든 리뷰는 영수증 인증이 된 상태임
                     st.markdown(f"- 🧾 **[인증됨]** {r['별점']} | {r['내용']}")
             else:
                 st.write("<small style='color:gray;'>아직 작성된 후기가 없습니다. 첫 후기를 남겨보세요!</small>", unsafe_allow_html=True)
@@ -271,8 +292,4 @@ try:
         else:
             st.info("💡 지도 위에 있는 **마커**를 클릭하시면 해당 가게의 요약 혜택이 뜨고, 패널에 상세 정보가 나타납니다!")
 
-    st.markdown(f"### 📋 {selected_school} {selected_dept} - {selected_category} 전체 목록")
-    st.dataframe(df_filtered[["이름", "카테고리", "혜택"]], use_container_width=True)
-
-except Exception as e:
-    st.error(f"데이터를 불러오거나 지도를 구성하는 중 오류가 발생했습니다: {e}")
+    st.markdown(f"### 📋 {
