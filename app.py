@@ -29,13 +29,12 @@ def save_json(file_path, data):
 if "reviews" not in st.session_state:
     st.session_state.reviews = load_json(REVIEWS_FILE)
 
-# --- [추가] 일별 방문자 수 체크 로직 ---
+# --- 일별 방문자 수 체크 로직 ---
 if "visited" not in st.session_state:
-    st.session_state.visited = True # 세션당 1회만 카운트하기 위한 플래그
+    st.session_state.visited = True
     today_str = str(date.today())
     visitors_data = load_json(VISITORS_FILE)
     
-    # 오늘 날짜의 방문자 수 1 증가
     visitors_data[today_str] = visitors_data.get(today_str, 0) + 1
     save_json(VISITORS_FILE, visitors_data)
 
@@ -64,14 +63,12 @@ if admin_password == "7777":
     st.header("📈 제휴 혜택 관리자 대시보드")
     st.markdown("누적 방문자 및 후기 데이터를 기반으로 한 통계입니다.")
     
-    # [추가] 방문자 수 시각화
     st.subheader("👥 일별 사이트 방문자 수")
     visitors_data = load_json(VISITORS_FILE)
     if visitors_data:
         df_visitors = pd.DataFrame(list(visitors_data.items()), columns=["날짜", "방문자수"])
         df_visitors = df_visitors.sort_values(by="날짜")
         
-        # 오늘 방문자 및 총 방문자 메트릭 표시
         today_val = visitors_data.get(str(date.today()), 0)
         total_val = sum(visitors_data.values())
         v_col1, v_col2 = st.columns(2)
@@ -115,7 +112,7 @@ if admin_password == "7777":
     else:
         st.info("아직 등록된 후기 데이터가 없습니다.")
         
-    st.stop() # 관리자 모드일 경우 여기서 코드 실행 중단
+    st.stop()
 
 elif admin_password != "":
     st.sidebar.error("⚠️ 잘못된 코드입니다.")
@@ -218,7 +215,6 @@ try:
             st.info(f"**🎁 특별 회원 전체 혜택**\n\n{store_info['혜택']}")
             st.markdown("---")
             
-            # --- 📸 후기 작성 및 영수증 필수 인증 폼 ---
             st.write("✏️ **이 가게에 후기 남기기**")
             with st.form(key=f'review_form_{store_info["이름"]}'):
                 rating = st.feedback("stars")
@@ -248,7 +244,6 @@ try:
                             extracted_text = pytesseract.image_to_string(img, lang='kor+eng')
                             clean_text = extracted_text.replace(" ", "").replace("\n", "")
                             
-                            # [수정] 영수증 형태 완화 로직: 특정 키워드나 가격 형태가 하나라도 보이면 통과
                             receipt_keywords = ["승인", "결제", "합계", "영수증", "부가세", "판매액", "카드", "주문", "금액"]
                             has_keyword = any(kw in clean_text for kw in receipt_keywords)
                             
@@ -293,3 +288,7 @@ try:
             st.info("💡 지도 위에 있는 **마커**를 클릭하시면 해당 가게의 요약 혜택이 뜨고, 패널에 상세 정보가 나타납니다!")
 
     st.markdown(f"### 📋 {selected_school} {selected_dept} - {selected_category} 전체 목록")
+    st.dataframe(df_filtered[["이름", "카테고리", "혜택"]], use_container_width=True)
+
+except Exception as e:
+    st.error(f"데이터를 불러오거나 지도를 구성하는 중 오류가 발생했습니다: {e}")
