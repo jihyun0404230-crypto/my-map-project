@@ -131,7 +131,6 @@ try:
         st.error("⚠️ 엑셀 파일의 데이터 칸(G열까지)이 부족합니다. 구조를 확인해 주세요!")
         st.stop()
 
-    # 💥 [초강력 방어막] 엑셀을 읽자마자 빈칸(NaN, float)을 강제로 소독합니다.
     for col in ["학교", "단과대", "이름", "카테고리", "혜택"]:
         df[col] = df[col].fillna("정보없음").astype(str).str.strip()
 
@@ -219,8 +218,8 @@ try:
                 rating = st.feedback("stars")
                 review_text = st.text_input("후기 내용을 입력하세요 (최소 5글자 이상):", placeholder="예: 혜택 잘 받았습니다! 맛있어요.")
                 
-                st.write("🔒 **영수증 방문 인증 (필수)**")
-                uploaded_file = st.file_uploader("리뷰 등록을 위해 제휴 식당 결제 영수증 사진을 반드시 올려주세요.", type=["jpg", "jpeg", "png"])
+                st.write("🔒 **방문 인증 (필수)**")
+                uploaded_file = st.file_uploader("리뷰 등록을 위해 해당 가게 방문을 인증할 수 있는 사진을 올려주세요.", type=["jpg", "jpeg", "png"])
                 
                 submit_button = st.form_submit_button(label="📝 후기 등록하기")
                 
@@ -232,55 +231,29 @@ try:
                     elif contains_bad_word(review_text):
                         st.error("🚨 비속어나 부적절한 단어가 포함된 후기는 등록할 수 없습니다.")
                     elif uploaded_file is None:
-                        st.error("⚠️ 리뷰를 등록하려면 반드시 해당 식당의 영수증 사진을 첨부해야 합니다.")
+                        st.error("⚠️ 리뷰를 등록하려면 반드시 사진을 첨부해야 합니다.")
                     else:
-                        is_valid_receipt = False
-                        try:
-                            import pytesseract
-                            from PIL import Image
-                            
-                            img = Image.open(uploaded_file)
-                            extracted_text = pytesseract.image_to_string(img, lang='kor+eng')
-                            clean_text = extracted_text.replace(" ", "").replace("\n", "")
-                            
-                            # 💥 [대안 2 적용] 인식 조건을 '원', '금액' 딱 두 단어로 대폭 완화했습니다!
-                            receipt_keywords = ["원", "금액"]
-                            has_keyword = any(kw in clean_text for kw in receipt_keywords)
-                            
-                            price_pattern = re.compile(r'\d{1,3}(?:,\d{3})*원?|\d+원')
-                            has_price = bool(price_pattern.search(clean_text))
-                            
-                            if has_keyword or has_price:
-                                is_valid_receipt = True
-                                
-                        except ImportError:
-                            st.error("⚠️ 시스템 오류: OCR 엔진을 사용할 수 없습니다.")
-                        except Exception as e:
-                            st.error("⚠️ 이미지 분석 중 오류가 발생했습니다. 사진을 다시 확인해 주세요.")
-
-                        if is_valid_receipt:
-                            if clicked_store_name not in st.session_state.reviews:
-                                st.session_state.reviews[clicked_store_name] = []
-                            
-                            score = rating + 1 
-                            stars = "⭐" * score
-                            
-                            st.session_state.reviews[clicked_store_name].append({
-                                "별점": stars, 
-                                "내용": review_text.strip(),
-                                "점수": score
-                            })
-                            
-                            save_json(REVIEWS_FILE, st.session_state.reviews)
-                            st.success("✅ 영수증 형태가 확인되어 리뷰 등록이 완료되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error("🚨 이미지에서 결제 내역이나 영수증 형태를 전혀 찾을 수 없어 리뷰 등록이 거부되었습니다.")
+                        # 💥 [수정됨] 사진만 올리면 무조건 통과! 복잡한 글자 검사를 없앴습니다.
+                        if clicked_store_name not in st.session_state.reviews:
+                            st.session_state.reviews[clicked_store_name] = []
+                        
+                        score = rating + 1 
+                        stars = "⭐" * score
+                        
+                        st.session_state.reviews[clicked_store_name].append({
+                            "별점": stars, 
+                            "내용": review_text.strip(),
+                            "점수": score
+                        })
+                        
+                        save_json(REVIEWS_FILE, st.session_state.reviews)
+                        st.success("✅ 사진이 정상 첨부되어 리뷰 등록이 완료되었습니다!")
+                        st.rerun()
             
             st.write("💬 **등록된 후기 목록**")
             if clicked_store_name in st.session_state.reviews and st.session_state.reviews[clicked_store_name]:
                 for r in reversed(st.session_state.reviews[clicked_store_name]):
-                    st.markdown(f"- 🧾 **[인증됨]** {r['별점']} | {r['내용']}")
+                    st.markdown(f"- 📸 **[인증됨]** {r['별점']} | {r['내용']}")
             else:
                 st.write("<small style='color:gray;'>아직 작성된 후기가 없습니다. 첫 후기를 남겨보세요!</small>", unsafe_allow_html=True)
                 
