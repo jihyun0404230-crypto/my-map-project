@@ -249,3 +249,27 @@ try:
                         st.session_state.reviews[clicked_store_name].append({
                             "별점": stars, 
                             "내용": review_text.strip(),
+                            "점수": score
+                        })
+                        
+                        save_json(REVIEWS_FILE, st.session_state.reviews)
+                        st.success("✅ 사진이 정상 첨부되어 리뷰 등록이 완료되었습니다!")
+                        st.rerun()
+            
+            st.write("💬 **등록된 후기 목록**")
+            if clicked_store_name in st.session_state.reviews and st.session_state.reviews[clicked_store_name]:
+                for r in reversed(st.session_state.reviews[clicked_store_name]):
+                    st.markdown(f"- 📸 **[인증됨]** {r['별점']} | {r['내용']}")
+            else:
+                st.write("<small style='color:gray;'>아직 작성된 후기가 없습니다. 첫 후기를 남겨보세요!</small>", unsafe_allow_html=True)
+                
+        else:
+            st.info("💡 지도 위에 있는 **마커**를 클릭하시면 해당 가게의 요약 혜택이 뜨고, 패널에 상세 정보가 나타납니다!")
+
+    st.markdown(f"### 📋 {selected_school} {selected_dept} - {selected_category} 전체 목록")
+    st.dataframe(df_filtered[["이름", "카테고리", "혜택"]], use_container_width=True)
+
+except Exception as e:
+    st.error(f"❌ 에러 발생 원인: {e}")
+    st.write("📋 현재 불러온 데이터의 앞부분 모양새입니다. 위도/경도가 숫자가 맞는지 확인해 보세요:")
+    st.dataframe(df.head(10))
