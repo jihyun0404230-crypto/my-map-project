@@ -5,7 +5,7 @@ from streamlit_folium import st_folium
 import json
 import os
 import re
-from datetime import date
+import datetime # 변경: 서버 시차 해결을 위해 datetime 모듈 전체를 가져옵니다.
 
 # --- 1. 페이지 레이아웃 설정 ---
 st.set_page_config(page_title="대학별 학과 제휴 혜택 지도 🗺️", layout="wide")
@@ -29,12 +29,15 @@ def save_json(file_path, data):
 if "reviews" not in st.session_state:
     st.session_state.reviews = load_json(REVIEWS_FILE)
 
-# --- 일별 방문자 수 체크 로직 ---
+# --- 일별 방문자 수 체크 로직 (한국 시간 KST 적용) ---
 if "visited" not in st.session_state:
     st.session_state.visited = True
-    today_str = str(date.today())
-    visitors_data = load_json(VISITORS_FILE)
     
+    # 🛠️ 서버가 외부에 있어도 무조건 한국 시간(+9시간) 기준으로 날짜를 생성합니다.
+    kst_now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+    today_str = kst_now.strftime("%Y-%m-%d")
+    
+    visitors_data = load_json(VISITORS_FILE)
     visitors_data[today_str] = visitors_data.get(today_str, 0) + 1
     save_json(VISITORS_FILE, visitors_data)
 
@@ -69,7 +72,11 @@ if admin_password == "7777":
         df_visitors = pd.DataFrame(list(visitors_data.items()), columns=["날짜", "방문자수"])
         df_visitors = df_visitors.sort_values(by="날짜")
         
-        today_val = visitors_data.get(str(date.today()), 0)
+        # 🛠️ 대시보드 조회 시점에도 한국 시간 기준으로 오늘 방문자 데이터를 매칭합니다.
+        kst_now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+        today_str = kst_now.strftime("%Y-%m-%d")
+        
+        today_val = visitors_data.get(today_str, 0)
         total_val = sum(visitors_data.values())
         v_col1, v_col2 = st.columns(2)
         v_col1.metric(label="오늘 방문자 수", value=f"{today_val} 명")
@@ -134,7 +141,7 @@ try:
     for col in ["학교", "단과대", "이름", "카테고리", "혜택"]:
         df[col] = df[col].fillna("정보없음").astype(str).str.strip()
 
-    df["위도"] = pd.to_numeric(df["위도"], errors='coerce')
+    df["위도"] = pd.to_numeric(df["위度"], errors='coerce')
     df["경도"] = pd.to_numeric(df["경도"], errors='coerce')
     df = df.dropna(subset=["위도", "경도"])
 
@@ -233,7 +240,6 @@ try:
                     elif uploaded_file is None:
                         st.error("⚠️ 리뷰를 등록하려면 반드시 사진을 첨부해야 합니다.")
                     else:
-                        # 💥 [수정됨] 사진만 올리면 무조건 통과! 복잡한 글자 검사를 없앴습니다.
                         if clicked_store_name not in st.session_state.reviews:
                             st.session_state.reviews[clicked_store_name] = []
                         
@@ -243,27 +249,3 @@ try:
                         st.session_state.reviews[clicked_store_name].append({
                             "별점": stars, 
                             "내용": review_text.strip(),
-                            "점수": score
-                        })
-                        
-                        save_json(REVIEWS_FILE, st.session_state.reviews)
-                        st.success("✅ 사진이 정상 첨부되어 리뷰 등록이 완료되었습니다!")
-                        st.rerun()
-            
-            st.write("💬 **등록된 후기 목록**")
-            if clicked_store_name in st.session_state.reviews and st.session_state.reviews[clicked_store_name]:
-                for r in reversed(st.session_state.reviews[clicked_store_name]):
-                    st.markdown(f"- 📸 **[인증됨]** {r['별점']} | {r['내용']}")
-            else:
-                st.write("<small style='color:gray;'>아직 작성된 후기가 없습니다. 첫 후기를 남겨보세요!</small>", unsafe_allow_html=True)
-                
-        else:
-            st.info("💡 지도 위에 있는 **마커**를 클릭하시면 해당 가게의 요약 혜택이 뜨고, 패널에 상세 정보가 나타납니다!")
-
-    st.markdown(f"### 📋 {selected_school} {selected_dept} - {selected_category} 전체 목록")
-    st.dataframe(df_filtered[["이름", "카테고리", "혜택"]], use_container_width=True)
-
-except Exception as e:
-    st.error(f"❌ 에러 발생 원인: {e}")
-    st.write("📋 현재 불러온 데이터의 앞부분 모양새입니다. 위도/경도가 숫자가 맞는지 확인해 보세요:")
-    st.dataframe(df.head(10))
