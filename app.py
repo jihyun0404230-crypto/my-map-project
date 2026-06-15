@@ -141,7 +141,7 @@ try:
     for col in ["학교", "단과대", "이름", "카테고리", "혜택"]:
         df[col] = df[col].fillna("정보없음").astype(str).str.strip()
 
-    df["위도"] = pd.to_numeric(df["위度"], errors='coerce')
+    df["위도"] = pd.to_numeric(df["위도"], errors='coerce')
     df["경도"] = pd.to_numeric(df["경도"], errors='coerce')
     df = df.dropna(subset=["위도", "경도"])
 
